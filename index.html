@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>DNA NW 알고리즘 시뮬레이터</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .box { background: white; padding: 40px 30px 30px 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; margin-bottom: 20px; width: 650px; position: relative; }
+        input { width: 230px; padding: 12px; margin: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; text-transform: uppercase; }
+        button { background-color: #4A90E2; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; }
+        
+        /* 표 디자인 */
+        table { border-collapse: collapse; margin: 20px 0; background: white; }
+        td { width: 45px; height: 45px; border: 1px solid #dee2e6; text-align: center; font-size: 14px; position: relative; transition: all 0.2s; }
+        .header-cell { background-color: #e9ecef; font-weight: bold; }
+        .calculating { background-color: #fff3bf; transform: scale(1.1); z-index: 10; }
+        .traceback { background-color: #ffec99 !important; border: 2px solid #fcc419 !important; font-weight: bold; }
+        
+        /* 결과 영역 디자인 */
+        #result-container { display: flex; justify-content: center; margin-top: 30px; gap: 5px; flex-wrap: wrap; }
+        .column { display: flex; flex-direction: column; align-items: center; font-family: 'Courier New', monospace; font-size: 28px; font-weight: bold; width: 40px; padding: 5px 0; border-radius: 8px; transition: all 0.5s ease; border: 2px solid transparent; }
+        .match-highlight { background-color: #fff3bf; border: 2px solid #fcc419; }
+        
+        #score-summary { margin-top: 20px; font-size: 20px; color: #2c3e50; font-weight: bold; min-height: 50px; padding-bottom: 100px; }
+    </style>
+</head>
+<body>
+
+    <div class="box" id="input-screen">
+        <div style="position: absolute; top: 15px; right: 20px; font-size: 14px; color: #888; font-weight: bold;">
+            3814 이정현
+        </div>
+
+        <h1>🧬 니들만-브니쉬 알고리즘 시뮬레이터</h1>
+        <p>분석할 DNA 서열을 직접 입력하세요.</p>
+        <input type="text" id="seq1" placeholder="서열 1">
+        <input type="text" id="seq2" placeholder="서열 2">
+        <br>
+        <button onclick="runSimulation()">분석 시작 (OK)</button>
+    </div>
+
+    <div id="table-container"></div>
+    <div id="result-container"></div>
+    <div id="score-summary"></div>
+
+    <script>
+        async function runSimulation() {
+            // 1. 입력값 검증 (A, T, G, C, U만 허용)
+            let s1Val = document.getElementById('seq1').value.toUpperCase().trim();
+            let s2Val = document.getElementById('seq2').value.toUpperCase().trim();
+            const validBase = /^[ATGCTU]+$/;
+
+            if (!s1Val || !s2Val) {
+                alert("서열을 입력해주세요!");
+                return;
+            }
+
+            if (!validBase.test(s1Val) || !validBase.test(s2Val)) {
+                alert("⚠️ 오류: 염기서열에는 A, T, G, C, U만 입력할 수 있습니다.\n(한글, 숫자, 특수문자, 공백 등은 제외해주세요)");
+                return;
+            }
+
+            const s1 = " " + s1Val;
+            const s2 = " " + s2Val;
+            const container = document.getElementById('table-container');
+            const resultContainer = document.getElementById('result-container');
+            const scoreSummary = document.getElementById('score-summary');
+            
+            container.innerHTML = ""; 
+            resultContainer.innerHTML = "";
+            scoreSummary.innerHTML = "";
+
+            const table = document.createElement('table');
+            const scoreMatrix = Array.from(Array(s2.length + 1), () => Array(s1.length + 1).fill(0));
+            
+            for (let i = 0; i < s2.length + 1; i++) {
+                const tr = document.createElement('tr');
+                for (let j = 0; j < s1.length + 1; j++) {
+                    const td = document.createElement('td');
+                    td.id = `cell-${i}-${j}`;
+                    if (i === 0 && j > 1) { td.innerText = s1[j-1]; td.className = 'header-cell'; }
+                    else if (j === 0 && i > 1) { td.innerText = s2[i-1]; td.className = 'header-cell'; }
+                    tr.appendChild(td);
+                }
+                table.appendChild(tr);
+            }
+            container.appendChild(table);
+
+            const gapPenalty = -1;
+            const matchScore = 1;
+            const mismatchScore = 0;
+
+            const totalCells = s2.length * s1.length;
+            const fillDelay = Math.max(5, 4000 / totalCells); 
+
+            // 1. 표 채우기
+            for (let i = 1; i < s2.length + 1; i++) {
+                for (let j = 1; j < s1.length + 1; j++) {
+                    const cell = document.getElementById(`cell-${i}-${j}`);
+                    cell.classList.add('calculating');
+                    cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    if (i === 1) scoreMatrix[i][j] = (j - 1) * gapPenalty;
+                    else if (j === 1) scoreMatrix[i][j] = (i - 1) * gapPenalty;
+                    else {
+                        let match = scoreMatrix[i-1][j-1] + (s1[j-1] === s2[i-1] ? matchScore : mismatchScore);
+                        let del = scoreMatrix[i-1][j] + gapPenalty;
+                        let ins = scoreMatrix[i][j-1] + gapPenalty;
+                        scoreMatrix[i][j] = Math.max(match, del, ins);
+                    }
+
+                    await new Promise(r => setTimeout(r, fillDelay)); 
+                    cell.innerText = scoreMatrix[i][j];
+                    cell.classList.remove('calculating');
+                }
+            }
+
+            // 2. 역추적 (원래 속도 150ms)
+            let res1 = [], res2 = [];
+            let i = s2.length, j = s1.length;
+            const tracebackDelay = 150; 
+
+            while (i > 1 || j > 1) {
+                const cell = document.getElementById(`cell-${i}-${j}`);
+                cell.classList.add('traceback');
+                cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await new Promise(r => setTimeout(r, tracebackDelay));
+
+                if (i > 1 && j > 1 && scoreMatrix[i][j] === scoreMatrix[i-1][j-1] + (s1[j-1] === s2[i-1] ? matchScore : mismatchScore)) {
+                    res1.unshift(s1[j-1]); res2.unshift(s2[i-1]);
+                    i--; j--;
+                } else if (i > 1 && scoreMatrix[i][j] === scoreMatrix[i-1][j] + gapPenalty) {
+                    res1.unshift("-"); res2.unshift(s2[i-1]);
+                    i--;
+                } else {
+                    res1.unshift(s1[j-1]); res2.unshift("-");
+                    j--;
+                }
+            }
+            document.getElementById(`cell-1-1`).classList.add('traceback');
+
+            // 3. 결과 출력 (자동 스크롤 포함)
+            const printDelay = Math.max(5, 500 / res1.length); 
+
+            for (let k = 0; k < res1.length; k++) {
+                const col = document.createElement('div');
+                col.className = 'column';
+                col.id = `col-${k}`;
+                col.innerHTML = `<span>${res1[k]}</span><span>${res2[k]}</span>`;
+                resultContainer.appendChild(col);
+                col.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await new Promise(r => setTimeout(r, printDelay));
+            }
+
+            // 4. 박스 촤라라락
+            let matchCount = 0;
+            const boxDelay = Math.max(5, 500 / res1.length); 
+
+            for (let k = 0; k < res1.length; k++) {
+                if (res1[k] === res2[k] && res1[k] !== "-") {
+                    document.getElementById(`col-${k}`).classList.add('match-highlight');
+                    matchCount++;
+                    document.getElementById(`col-${k}`).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await new Promise(r => setTimeout(r, boxDelay)); 
+                }
+            }
+            scoreSummary.innerHTML = `총 일치 염기 개수: ${matchCount}개`;
+            scoreSummary.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    </script>
+</body>
+</html>
