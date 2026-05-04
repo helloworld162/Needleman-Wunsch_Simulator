@@ -164,7 +164,11 @@
                     await new Promise(r => setTimeout(r, boxDelay)); 
                 }
             }
-            scoreSummary.innerHTML = `총 일치 염기 개수: ${matchCount}개`;
+
+            // 퍼센트 계산 (일치 개수 / 전체 정렬 길이 * 100)
+            const matchPercent = ((matchCount / res1.length) * 100).toFixed(1);
+            
+            scoreSummary.innerHTML = `총 일치 염기 개수: ${matchCount}개 (${matchPercent}%)`;
             scoreSummary.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
     </script>
